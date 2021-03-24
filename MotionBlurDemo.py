@@ -7,7 +7,7 @@ import numpy as np
 from numpy.core.defchararray import title
 from numpy.core.fromnumeric import mean, size
 # import sympy as sp
-
+import datetime,time
 def tand(x):
     return math.tan(math.radians(x))
 
@@ -27,24 +27,30 @@ def cosd(x):
 #     d1,d2 = triangle_fun(d1),triangle_fun(d2)
 #     return d1*d2#np.dot(d1,d2)
 
+# def shift(lst, k):
+#   x = lst[:k]
+#   x.reverse()
+#   y = lst[k:]
+#   y.reverse()
+#   r = x+y
+#   return list(reversed(r))
 def shift(lst, k):
   x = lst[:k]
-  x.reverse()
+  x = np.flipud(x)
   y = lst[k:]
-  y.reverse()
-  r = x+y
-  return list(reversed(r))
-
+  y = np.flipud(y)
+  r = np.concatenate((x,y))
+  return np.flipud(r)
 
 
 def cicleshift(lst,y,x):
     y = -y
     x = -x
-    new = []
-    lst = lst.tolist()
+    new =np.array([])
+    # lst = lst.tolist()
     for i in range(len(lst)):
-        new.append(shift(lst[i],x))
-    return np.array(shift(new,y))
+        lst[i] = shift(lst[i],x)
+    return np.array(shift(lst,y))
 
 def im2double(im):
     min_val = np.min(im.ravel())
@@ -70,6 +76,7 @@ def createTrajectory(TrajSize, anxiety, numT, MaxTotalLength, do_show):
     % TrajCurve.Anxiety                     input parameter
     % TrajCurve.MaxTotalLength      input parameter
     % TrajCurve.nAbruptShakes       number of abrupt shakes occurred here'''
+    start1  = time.time()
     do_compute_curvature = 0
     TotCurvature = 0
     TotLength = 0
@@ -77,7 +84,7 @@ def createTrajectory(TrajSize, anxiety, numT, MaxTotalLength, do_show):
 
 
     centripetal = 0.7 * random.random()
-    gaussianTerm =10 * random.random()
+    gaussianTerm = 10 * random.random()
     freqBigShakes = 0.2 * random.random()
     init_angle = 360 * random.random()
 
@@ -142,6 +149,8 @@ def createTrajectory(TrajSize, anxiety, numT, MaxTotalLength, do_show):
     TrajCurve['Anxiety'] = anxiety
     TrajCurve['MaxTotalLength'] = MaxTotalLength
     TrajCurve['nAbruptShakes'] = abruptShakesCounter
+    end1= time.time()
+    print("function1 time:{}".format(end1-start1))
     return TrajCurve
 
     
@@ -159,7 +168,7 @@ def createPSFs(TrajCurve , PSFsize , T , do_show , do_center):
     % PSFS                       cell array containing PSFS sampling TrajCurve for each exposure time  in T
     %                                   numel(PSFS) = length(T).
     '''
-
+    start2 = time.time()
     PSFsize=[PSFsize,PSFsize]
 
     PSFnumber = len(T)
@@ -176,34 +185,41 @@ def createPSFs(TrajCurve , PSFsize , T , do_show , do_center):
 
     triangle_fun = lambda d : max(0,(1-abs(d)))
     triangle_fun_prod = lambda d1,d2 :triangle_fun(d1)*triangle_fun(d2)
-    for jj in range(len(T)):
+    lenx = len(x)
+    lenT = len(T)
+    # PSFS = np.array(PSFS)
+    for jj in range(lenT):
         if jj == 0:
             prevT = 0
         else:
             prevT = T[jj - 2]
-        for t in range(len(x)):
-            if (T[jj]*numt >= t) and (prevT * numt < t-1):
+        for t in range(lenx):
+            Tnum = T[jj]*numt
+            pTnum = prevT * numt
+            if (Tnum >= t) and (pTnum < t-1):
                 t_proportion = 1
-            elif (T[jj]*numt >= t-1) and (prevT * numt < t-1) :
-                t_proportion = (T[jj] * numt)-(t-1)
-            elif (T[jj]*numt >= t) and (prevT * numt < t):
-                t_proportion = t - (prevT * numt)
-            elif (T[jj]*numt >= t - 1 ) and (prevT * numt < t):
-                t_proportion = (T[jj] - prevT) * numt
+            elif (Tnum >= t-1) and (pTnum < t-1) :
+                t_proportion = (Tnum)-(t-1)
+            elif (Tnum >= t) and (pTnum < t):
+                t_proportion = t - (pTnum)
+            elif (Tnum >= t - 1 ) and (pTnum < t):
+                t_proportion = Tnum-pTnum#(T[jj] - prevT) * numt
             else:
                 t_proportion = 0
-
-            m2 = min(PSFsize[1] - 1 , max(1,math.floor(x[t].real)))
+            xreal,ximag = x[t].real,x[t].imag
+            m2 = min(PSFsize[1] - 1 , max(1,math.floor(xreal)))
             M2 = m2 + 1
-            m1 = min(PSFsize[0]-1 , max(1,math.floor(x[t].imag)))
+            m1 = min(PSFsize[0]-1 , max(1,math.floor(ximag)))
             M1 = m1 + 1
 
-            PSF[m1][m2] = PSF[m1][m2] + t_proportion * triangle_fun_prod(x[t].real - m2 , x[t].imag - m1)
-            PSF[m1][M2] = PSF[m1][M2] + t_proportion * triangle_fun_prod(x[t].real - M2 , x[t].imag - m1)
-            PSF[M1][m2] = PSF[M1][m2] + t_proportion * triangle_fun_prod(x[t].real - m2 , x[t].imag - M1)
-            PSF[M1][M2] = PSF[M1][M2] + t_proportion * triangle_fun_prod(x[t].real - M2 , x[t].imag - M1)
+            PSF[m1][m2] = PSF[m1][m2] + t_proportion * triangle_fun_prod(xreal - m2 , ximag - m1)
+            PSF[m1][M2] = PSF[m1][M2] + t_proportion * triangle_fun_prod(xreal - M2 , ximag - m1)
+            PSF[M1][m2] = PSF[M1][m2] + t_proportion * triangle_fun_prod(xreal - m2 , ximag - M1)
+            PSF[M1][M2] = PSF[M1][M2] + t_proportion * triangle_fun_prod(xreal - M2 , ximag - M1)
 
-        PSFS[jj] = PSF/len(x)
+        PSFS[jj] = PSF/lenx
+    end2 = time.time()
+    print("function2 time:{}".format(end2-start2))
     if do_show:
         C = np.array([])
         D = np.array([])
@@ -244,25 +260,33 @@ def createBlurredRaw(y, psf, lambda_, sigma_gauss):
     % lambda           Poisson noise parameter
     % sigma_gauss      Gaussian noise parameter
     % init             (optional) initialization parameter for Poissonian and Gaussian noise'''
-    random.seed(1)
+    start3 = time.time()
+    # random.seed(1)
     y = y * lambda_
     yN,xN = y.shape
     ghy,ghx = psf.shape
     big_v = np.zeros((yN,xN))
-    for i in range(ghy):
-        for j in range(ghx):
-            big_v[i][j] = psf[i][j]
+    # for i in range(ghy):
+    #     for j in range(ghx):
+    #         big_v[i][j] = psf[i][j]
+    psf_ = np.array(psf)
+    big_v[:ghy,:ghx] = psf_[:ghy,:ghx]
     big_v = cicleshift(big_v,-round((ghy-1)/2),-round((ghx-1)/2))
     V = np.fft.fft2(big_v)
     y_blur = np.fft.ifft2(V * np.fft.fft2(y)).real
 
 
     y_blur_new = np.zeros((len(y_blur),len(y_blur[0])))
-    for i in range(len(y_blur)):
-        for j in range(len(y_blur[0])):
-            y_blur_new[i][j] = y_blur[i][j]>0
+
+    # for i in range(len(y_blur)):
+    #     for j in range(len(y_blur[0])):
+    #         y_blur_new[i][j] = y_blur[i][j]>0
+    y_blur_new = y_blur>0
+    
     Raw = np.random.poisson(np.array(y_blur)*np.array(y_blur_new))
     Raw = Raw + sigma_gauss*np.random.randn(Raw.shape[0],Raw.shape[1])
+    end3 = time.time()
+    print("function3 time:{}".format(end3-start3))
 
     return Raw
     
@@ -299,7 +323,7 @@ def demo(img):
 
 if __name__ == '__main__':
     
-    do_show = 1
+    do_show = 0
     PSFsize = 64
     anxiety = 0.005
     numT = 2000 
@@ -308,23 +332,31 @@ if __name__ == '__main__':
     do_centerAndScale = 0
     lambda_ = 2048
     sigmaGauss = 0.05
-
+    starttime = time.time()
     img = cv.imread('img\\3d\\20210108\\72.jpg',cv.IMREAD_GRAYSCALE)
-    y =im2double(img)
+    # img = cv.imread('img\\3d\\20210108\\72.jpg', cv.IMREAD_COLOR)
+    img = img[::-1,].copy()
+    # img = cv.imread('img\\3d\\20210108\\72.jpg', cv.IMREAD_COLOR)
+    img =im2double(img)
 
     # TrajCurve = createTrajectory(PSFsize, anxiety, numT, MaxTotalLength, do_show)
     # PSFs = createPSFs(TrajCurve, PSFsize,  T , do_show , do_centerAndScale)
     
-    TrajCurve = createTrajectory(64,0.005,2000,64,1)
+    TrajCurve = createTrajectory(64,0.005,2000,64,do_show)
 
     PSFs = createPSFs(TrajCurve,64,T,do_show,do_centerAndScale)
 
     zeroCol = []
     paddedImage = [zeroCol]
     for ii in range(len(PSFs)):
-        Raw  = createBlurredRaw(y,PSFs[ii],lambda_,sigmaGauss)
+        Raw  = createBlurredRaw(img,PSFs[ii],lambda_,sigmaGauss)
+        Raw = Raw.tolist()
+        Raw = np.array(Raw,dtype='int')
+        endtime = time.time()
+        print('all time :{}'.format(endtime-starttime))
         plt.figure()
         plt.imshow(Raw,cmap='gray')
+        cv.imwrite('./test.jpg',Raw)
         imTemp = Raw / max(map(max,Raw))
         imTemp[:]
         plt.title(['image having exposure time ', str(T[ii])])
@@ -338,7 +370,7 @@ if __name__ == '__main__':
     # imTemp = Raw / max(map(max,Raw))
     # imTemp[:]
     # plt.title(['image having exposure time ', str(T[ii])])
-    plt.show()
+    # plt.show()
 
 
 
